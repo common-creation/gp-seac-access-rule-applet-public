@@ -1,0 +1,78 @@
+# Copyright 2025-2026 COMMON CREATION, Co., Ltd.
+# SPDX-License-Identifier: Apache-2.0
+name: Build ARA applets
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8
+
+jobs:
+  build-cap:
+    name: ARA-${{ matrix.applet }} / ${{ matrix.javacard }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        applet: [m, d]
+        javacard: [jc304, jc305, jc310]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: Install Ant
+        run: sudo apt-get update && sudo apt-get install --yes ant
+
+      - name: Compile, convert and verify CAP
+        run: ant -noinput -Djc_version=${{ matrix.javacard }} build_${{ matrix.applet }}
+
+      - name: Generate artifact checksums
+        working-directory: out
+        run: >-
+          sha256sum ara_${{ matrix.applet }}_${{ matrix.javacard }}.cap
+          ara_${{ matrix.applet }}_${{ matrix.javacard }}.jar
+          > ara_${{ matrix.applet }}_${{ matrix.javacard }}.sha256
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ara_${{ matrix.applet }}_${{ matrix.javacard }}
+          path: |
+            out/ara_${{ matrix.applet }}_${{ matrix.javacard }}.cap
+            out/ara_${{ matrix.applet }}_${{ matrix.javacard }}.jar
+            out/ara_${{ matrix.applet }}_${{ matrix.javacard }}.sha256
+            out/LICENSE
+            out/NOTICE
+            out/THIRD_PARTY_NOTICES.md
+          if-no-files-found: error
+
+  protocol-tests:
+    name: ARA-M/D protocol tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Run simulator protocol tests
+        run: bash tests/run.sh

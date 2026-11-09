@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2025-2026 COMMON CREATION, Co., Ltd.
+     SPDX-License-Identifier: Apache-2.0 -->
+<project name="gp-seac-access-rule-applet" default="build_all" basedir=".">
+    <property file="version.properties"/>
+    <property name="jc_version" value="jc305"/>
+    <property name="gp.api" location="lib/globalplatform-exports/org.globalplatform-1.6"/>
+    <target name="clean" description="Delete build output">
+        <delete dir="build"/><delete dir="out"/>
+    </target>
+    <target name="prepare">
+        <ant dir="lib/ant-javacard" target="dist"/>
+        <taskdef name="javacard" classpath="lib/ant-javacard/ant-javacard.jar"
+                 classname="pro.javacard.ant.JavaCard"/>
+        <mkdir dir="out"/>
+        <copy todir="out">
+            <fileset dir="." includes="LICENSE,NOTICE,THIRD_PARTY_NOTICES.md"/>
+        </copy>
+    </target>
+    <target name="build" depends="build_all"/>
+    <target name="build_all" description="Build ARA-M/D for Java Card 3.0.4, 3.0.5 and 3.1.0"
+            depends="build_jc304,build_jc305,build_jc310"/>
+    <!-- CAPs contain one Java package. Copy shared source into each package so
+         the two CAPs can be installed independently, without a library CAP. -->
+    <target name="_select_sdk">
+        <fail message="Unsupported jc_version: ${jc_version}; use jc304, jc305 or jc310">
+            <condition><not><or>
+                <equals arg1="${jc_version}" arg2="jc304"/>
+                <equals arg1="${jc_version}" arg2="jc305"/>
+                <equals arg1="${jc_version}" arg2="jc310"/>
+            </or></not></condition>
+        </fail>
+        <condition property="jc_sdk" value="jc304_kit">
+            <equals arg1="${jc_version}" arg2="jc304"/>
+        </condition>
+        <condition property="jc_sdk" value="jc305u4_kit">
+            <equals arg1="${jc_version}" arg2="jc305"/>
+        </condition>
+        <condition property="jc_sdk" value="jc310r20210706_kit">
+            <equals arg1="${jc_version}" arg2="jc310"/>
+        </condition>
+    </target>
+    <target name="_build" depends="_select_sdk,prepare">
+        <delete dir="build/${output_name}"/>
+        <mkdir dir="build/${output_name}/src"/>
+        <copy todir="build/${output_name}/src" flatten="true" encoding="UTF-8">
+            <fileset dir="src" includes="**/ara/*.java,**/${applet_package}/*.java"/>
+            <filterchain>
+                <replacestring from="com.common_creation.applet.ara"
+                               to="com.common_creation.applet.${applet_package}"/>
+            </filterchain>
+        </copy>
+        <javacard jckit="lib/ant-javacard/sdks/${jc_sdk}">
+            <cap output="out/${output_name}.cap" jar="out/${output_name}.jar"
+                 classes="build/${output_name}/classes" sources="build/${output_name}/src"
+                 aid="${package_aid}" version="${cap.version}" debug="false">
+                <applet aid="${package_aid}00" class="com.common_creation.applet.${applet_package}.${applet_class}"/>
+                <import jar="${gp.api}/gpapi-globalplatform.jar" exps="${gp.api}/exports"/>
+            </cap>
+        </javacard>
+    </target>
+    <target name="_build_pair">
+        <antcall target="build_d"/>
+        <antcall target="build_m"/>
+    </target>
+    <target name="build_d" description="Build ARA-D; select SDK with -Djc_version=jc304, jc305 or jc310">
+        <antcall target="_build">
+            <param name="applet_package" value="gp_ara_d"/>
+            <param name="applet_class" value="ARADApplet"/>
+            <param name="package_aid" value="A000000151444143"/>
+            <param name="output_name" value="ara_d_${jc_version}"/>
+        </antcall>
+    </target>
+    <target name="build_m" description="Build ARA-M; select SDK with -Djc_version=jc304, jc305 or jc310">
+        <antcall target="_build">
+            <param name="applet_package" value="gp_ara_m"/>
+            <param name="applet_class" value="ARAMApplet"/>
+            <param name="package_aid" value="A00000015141434C"/>
+            <param name="output_name" value="ara_m_${jc_version}"/>
+        </antcall>
+    </target>
+    <target name="build_jc304" description="Build both applets for Java Card 3.0.4">
+        <antcall target="_build_pair">
+            <param name="jc_version" value="jc304"/>
+        </antcall>
+    </target>
+    <target name="build_jc305" description="Build both applets for Java Card 3.0.5">
+        <antcall target="_build_pair">
+            <param name="jc_version" value="jc305"/>
+        </antcall>
+    </target>
+    <target name="build_jc310" description="Build both applets for Java Card 3.1.0">
+        <antcall target="_build_pair">
+            <param name="jc_version" value="jc310"/>
+        </antcall>
+    </target>
+</project>
